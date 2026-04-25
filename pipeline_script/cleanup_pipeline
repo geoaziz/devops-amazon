@@ -1,0 +1,255 @@
+pipeline {
+    agent any
+
+    environment {
+        KUBECTL = '/usr/local/bin/kubectl'
+        AWS_REGION = 'us-east-1'
+    }
+
+    parameters {
+        string(name: 'CLUSTER_NAME', defaultValue: 'amazon-prime-cluster', description: 'Enter your EKS cluster name')
+        booleanParam(name: 'DELETE_ECR', defaultValue: true, description: 'Delete ECR repository?')
+        booleanParam(name: 'CONFIRM_DELETION', defaultValue: false, description: 'Are you SURE you want to delete everything? (Check to confirm)')
+    }
+
+    stages {
+
+        stage("Safety Check") {
+            steps {
+                script {
+                    if (!params.CONFIRM_DELETION) {
+                        error("Pipeline aborted: CONFIRM_DELETION not checked. This pipeline will delete resources!")
+                    }
+                    echo "Confirmation received. Proceeding with cleanup..."
+                }
+            }
+        }
+
+        stage("Login to EKS") {
+            steps {
+                script {
+                    withCredentials([
+                        string(credentialsId: 'aws-access-key', variable: 'AWS_ACCESS_KEY'),
+                        string(credentialsId: 'aws-secret-key', variable: 'AWS_SECRET_KEY')
+                    ]) {
+                        withEnv([
+                            "AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY}",
+                            "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_KEY}"
+                        ]) {
+                            sh """
+                            aws eks --region ${AWS_REGION} update-kubeconfig --name ${params.CLUSTER_NAME}
+                            kubectl cluster-info
+                            """
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Delete Application Resources') {
+            steps {
+                script {
+                    echo "Deleting application deployments and services..."
+                    
+                    sh '''
+                    # Delete your Amazon Prime app
+                    kubectl delete deploy amazon-prime-app --ignore-not-found=true
+                    kubectl delete svc amazon-prime-service --ignore-not-found=true
+                    
+                    # Wait for LoadBalancer to be deleted (prevents orphaned LBs)
+                    echo "Waiting for LoadBalancer deletion..."
+                    sleep 30
+                    
+                    # List any remaining services with LoadBalancer type
+                    kubectl get svc --all-namespaces | grep LoadBalancer || echo "No LoadBalancers found"
+                    '''
+                }
+            }
+        }
+
+        stage('Delete ArgoCD') {
+            steps {
+                script {
+                    echo "Deleting ArgoCD installation..."
+                    
+                    sh '''
+                    # Delete ArgoCD resources using the installation manifest
+                    kubectl delete -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml --ignore-not-found=true
+                    
+                    # Wait for resources to terminate
+                    sleep 20
+                    
+                    # Delete ArgoCD namespace (ensures everything is cleaned up)
+                    kubectl delete namespace argocd --ignore-not-found=true
+                    
+                    echo "ArgoCD deleted successfully"
+                    '''
+                }
+            }
+        }
+        
+        stage('Delete Prometheus & Grafana') {
+            steps {
+                script {
+                    echo "Deleting Prometheus and Grafana monitoring stack..."
+                    
+                    sh '''
+                    # List Helm releases in prometheus namespace
+                    echo "Current Helm releases in prometheus namespace:"
+                    helm list -n prometheus || echo "No Helm releases found"
+                    
+                    # Uninstall the correct Helm release name (stable, not kube-stack)
+                    helm uninstall stable -n prometheus --ignore-not-found 2>/dev/null || echo "Helm release 'stable' not found, skipping..."
+                    
+                    # Wait for LoadBalancers to be deleted
+                    echo "Waiting for LoadBalancer deletion..."
+                    sleep 30
+                    
+                    # Delete prometheus namespace (ensures everything is cleaned up)
+                    kubectl delete namespace prometheus --ignore-not-found=true
+                    
+                    echo "Prometheus and Grafana deleted successfully"
+                    '''
+                }
+            }
+        }
+
+        stage('Cleanup Helm Repositories') {
+            steps {
+                script {
+                    echo "Removing Helm repositories..."
+                    
+                    sh '''
+                    # Remove Helm repos (optional cleanup)
+                    helm repo remove stable 2>/dev/null || echo "Repo 'stable' not found"
+                    helm repo remove prometheus-community 2>/dev/null || echo "Repo 'prometheus-community' not found"
+                    
+                    echo "Helm repositories cleaned up"
+                    '''
+                }
+            }
+        }
+
+        stage('Delete ECR Repository') {
+            when {
+                expression { params.DELETE_ECR == true }
+            }
+            steps {
+                script {
+                    echo "Deleting ECR repository..."
+                    
+                    withCredentials([
+                        string(credentialsId: 'aws-access-key', variable: 'AWS_ACCESS_KEY'),
+                        string(credentialsId: 'aws-secret-key', variable: 'AWS_SECRET_KEY')
+                    ]) {
+                        withEnv([
+                            "AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY}",
+                            "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_KEY}"
+                        ]) {
+                            sh """
+                            # Delete ECR repository (only the one for this project)
+                            aws ecr delete-repository \
+                                --repository-name amazon-clone-k8s-eks-argocd \
+                                --region ${AWS_REGION} \
+                                --force 2>/dev/null || echo "ECR repository not found or already deleted"
+                            
+                            echo "ECR repository deleted successfully"
+                            """
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Verify Cleanup') {
+            steps {
+                script {
+                    echo "Verifying cleanup..."
+                    
+                    sh '''
+                    echo "=== Remaining Kubernetes Resources ==="
+                    
+                    echo "Namespaces:"
+                    kubectl get namespaces | grep -E 'argocd|prometheus' || echo "✓ ArgoCD and Prometheus namespaces deleted"
+                    
+                    echo ""
+                    echo "Services with LoadBalancer type:"
+                    kubectl get svc --all-namespaces | grep LoadBalancer || echo "✓ No LoadBalancers found"
+                    
+                    echo ""
+                    echo "Deployments in default namespace:"
+                    kubectl get deployments || echo "✓ No deployments in default namespace"
+                    
+                    echo ""
+                    echo "=== Cleanup Summary ==="
+                    echo "✓ Application resources deleted"
+                    echo "✓ ArgoCD deleted"
+                    echo "✓ Prometheus & Grafana deleted"
+                    echo "✓ Helm repositories cleaned"
+                    '''
+                    
+                    withCredentials([
+                        string(credentialsId: 'aws-access-key', variable: 'AWS_ACCESS_KEY'),
+                        string(credentialsId: 'aws-secret-key', variable: 'AWS_SECRET_KEY')
+                    ]) {
+                        withEnv([
+                            "AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY}",
+                            "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_KEY}"
+                        ]) {
+                            sh """
+                            if [ "${params.DELETE_ECR}" = "true" ]; then
+                                echo ""
+                                echo "ECR Repositories:"
+                                aws ecr describe-repositories --region ${AWS_REGION} --repository-names amazon-clone-k8s-eks-argocd 2>/dev/null || echo "✓ ECR repository deleted"
+                            fi
+                            """
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Important Reminder') {
+            steps {
+                script {
+                    echo """
+                    ============================================
+                    CLEANUP INCOMPLETE - ACTION REQUIRED
+                    ============================================
+                    
+                    This pipeline deleted Kubernetes resources only.
+                    
+                    ⚠️  YOUR EKS CLUSTER IS STILL RUNNING! ⚠️
+                    
+                    To completely stop AWS charges, run:
+                    
+                    1. SSH to bastion server
+                    2. cd terraform/eks_code/
+                    3. terraform destroy
+                    4. Type: yes
+                    
+                    Resources still costing money:
+                    - EKS Control Plane: \$73/month
+                    - Worker Nodes: \$30/month
+                    - NAT Gateway: \$32/month
+                    - VPC resources
+                    
+                    Total ongoing cost: ~\$135/month
+                    
+                    Run terraform destroy to stop all charges!
+                    ============================================
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Cleanup completed successfully! Remember to run 'terraform destroy' to delete the cluster."
+        }
+        failure {
+            echo "Cleanup failed! Check logs above for errors. Some resources may remain."
+        }
+    }
+}

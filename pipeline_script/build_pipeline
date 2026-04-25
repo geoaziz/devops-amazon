@@ -1,0 +1,159 @@
+pipeline {
+    agent any
+
+    // Define tools that Jenkins should auto-install and make available
+    tools {
+        jdk 'jdk'           // Java Development Kit for building
+        nodejs 'Nodejs'     // Node.js runtime for npm commands
+    }
+    
+    // Parameters allow users to provide input when triggering the build
+    parameters {
+        string(name: 'ECR_REPO_NAME', defaultValue: 'amazon-clone-k8s-eks-argocd', description: 'Enter the ECR Repository name')
+        string(name: 'AWS_ACCOUNT_ID', defaultValue: '294568841304', description: 'Enter your AWS Account ID (12-digit number)')
+    }
+    
+    // Environment variables accessible across all stages
+    environment {
+        SCANNER_HOME = tool 'sonarqube scanner'  // Path to SonarQube Scanner tool
+    }
+    
+    stages {
+        
+        // Stage 1: Clone the source code from GitHub
+        stage('Git Checkout') {
+            steps {
+                git branch: 'main', 
+                    url: 'https://github.com/neerajnakka/amazon-clone-k8s-eks-argoCD'
+            }
+        }
+        
+        // Stage 2: Run SonarQube code quality analysis
+        stage('SonarQube Analysis') {
+            steps {
+                // withSonarQubeEnv injects SonarQube server config and credentials
+                withSonarQubeEnv('sonar-server') {
+                    sh """
+                        ${SCANNER_HOME}/bin/sonar-scanner \
+                        -Dsonar.projectName=amazon-prime \
+                        -Dsonar.projectKey=amazon-prime
+                    """
+                }
+            }
+        }
+        
+        // Stage 3: Wait for SonarQube Quality Gate result
+        // If code doesn't meet quality standards, this can fail the build
+        stage('SonarQube Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    // abortPipeline: false means continue even if quality gate fails
+                    waitForQualityGate abortPipeline: false, credentialsId: 'sonar-token'
+                }
+            }
+        }
+        
+        // Stage 4: Install Node.js dependencies
+        stage('NPM Install') {
+            steps {
+                sh "npm install"
+            }
+        }
+        
+        // Stage 5: Run Trivy security scan on filesystem
+        // Checks for vulnerabilities in dependencies and code
+        stage('Trivy Filesystem Scan') {
+            steps {
+                sh "trivy fs . > trivy-scan-results.txt"
+            }
+        }
+        
+        // Stage 6: Build Docker image from Dockerfile
+        stage('Docker Image Build') {
+            steps {
+                sh "docker build -t ${params.ECR_REPO_NAME} ."
+            }
+        }
+        
+        // Stage 7: Create ECR repository if it doesn't exist
+        stage('Create ECR Repo') {
+            steps {
+                withCredentials([
+                    string(credentialsId: 'aws-access-key', variable: 'AWS_ACCESS_KEY'),
+                    string(credentialsId: 'aws-secret-key', variable: 'AWS_SECRET_KEY')
+                ]) {
+                    sh """
+                        # Configure AWS CLI with credentials
+                        aws configure set aws_access_key_id \$AWS_ACCESS_KEY
+                        aws configure set aws_secret_access_key \$AWS_SECRET_KEY
+                        aws configure set region us-east-1
+                        
+                        # Check if repository exists, if not create it
+                        # The '||' means "if previous command fails, run next command"
+                        aws ecr describe-repositories --repository-names ${params.ECR_REPO_NAME} --region us-east-1 || \
+                        aws ecr create-repository --repository-name ${params.ECR_REPO_NAME} --region us-east-1
+                    """
+                }
+            }
+        }
+        
+        // Stage 8: Login to ECR and tag the Docker image
+        stage('Login to ECR & Tag Image') {
+            steps {
+                withCredentials([
+                    string(credentialsId: 'aws-access-key', variable: 'AWS_ACCESS_KEY'),
+                    string(credentialsId: 'aws-secret-key', variable: 'AWS_SECRET_KEY')
+                ]) {
+                    sh """
+                        # Login to AWS ECR registry
+                        aws ecr get-login-password --region us-east-1 | \
+                        docker login --username AWS --password-stdin \
+                        ${params.AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com
+                        
+                        # Tag image with build number (for version tracking)
+                        docker tag ${params.ECR_REPO_NAME} \
+                        ${params.AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/${params.ECR_REPO_NAME}:${BUILD_NUMBER}
+                        
+                        # Tag image with 'latest' (for easy deployment)
+                        docker tag ${params.ECR_REPO_NAME} \
+                        ${params.AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/${params.ECR_REPO_NAME}:latest
+                    """
+                }
+            }
+        }
+        
+        // Stage 9: Push both tagged images to ECR
+        stage('Push Image to ECR') {
+            steps {
+                withCredentials([
+                    string(credentialsId: 'aws-access-key', variable: 'AWS_ACCESS_KEY'),
+                    string(credentialsId: 'aws-secret-key', variable: 'AWS_SECRET_KEY')
+                ]) {
+                    sh """
+                        # Push image with build number tag
+                        docker push ${params.AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/${params.ECR_REPO_NAME}:${BUILD_NUMBER}
+                        
+                        # Push image with latest tag
+                        docker push ${params.AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/${params.ECR_REPO_NAME}:latest
+                    """
+                }
+            }
+        }
+        
+        // Stage 10: Remove Docker images from Jenkins server to save disk space
+        stage('Cleanup Images from Jenkins Server') {
+            steps {
+                sh """
+                    # Remove build-number tagged image
+                    docker rmi ${params.AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/${params.ECR_REPO_NAME}:${BUILD_NUMBER} || true
+                    
+                    # Remove latest tagged image
+                    docker rmi ${params.AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/${params.ECR_REPO_NAME}:latest || true
+                    
+                    # Remove local untagged image
+                    docker rmi ${params.ECR_REPO_NAME} || true
+                """
+            }
+        }
+    }
+}

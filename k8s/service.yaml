@@ -1,0 +1,17 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: amazon-prime-service
+  labels:
+    app: amazon-prime-app
+spec:
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 3000
+  selector:
+    app: amazon-prime-app
+  type: LoadBalancer
+---
