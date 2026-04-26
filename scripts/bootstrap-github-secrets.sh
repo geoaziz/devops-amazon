@@ -11,13 +11,19 @@ usage() {
 Usage:
   bootstrap-github-secrets.sh [--repo owner/name]
 
-Environment variables accepted:
-  DOCKERHUB_USERNAME or DOCKER_USERNAME
-  DOCKERHUB_TOKEN or DOCKER_PAT
+GitHub secrets written (canonical names):
+  DOCKERHUB_USERNAME
+  DOCKERHUB_TOKEN
   SONAR_TOKEN
-  SONAR_ORGANIZATION or SONAR_ORG
-  SONAR_PROJECT_KEY or SONAR_PROJECT
+  SONAR_ORGANIZATION
+  SONAR_PROJECT_KEY
   GIT_TOKEN
+
+Accepted local aliases (for .env or shell input):
+  DOCKER_USERNAME -> DOCKERHUB_USERNAME
+  DOCKER_PAT -> DOCKERHUB_TOKEN
+  SONAR_ORG -> SONAR_ORGANIZATION
+  SONAR_PROJECT -> SONAR_PROJECT_KEY
 EOF
 }
 
@@ -190,7 +196,8 @@ secrets=(
   "GIT_TOKEN:"
 )
 
-echo "Writing secrets to ${repo}"
+echo "Writing canonical secrets to ${repo}"
+echo "Accepted aliases: DOCKER_USERNAME, DOCKER_PAT, SONAR_ORG, SONAR_PROJECT"
 
 for entry in "${secrets[@]}"; do
   secret_name="${entry%%:*}"

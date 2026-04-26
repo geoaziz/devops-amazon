@@ -46,7 +46,8 @@
 
 1. **Add repository secrets**
    - Use `scripts/bootstrap-github-secrets.sh` to load the required GitHub secrets.
-   - The workflow expects `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`, `SONAR_TOKEN`, `SONAR_ORGANIZATION`, `SONAR_PROJECT_KEY`, and `GIT_TOKEN`.
+   - Canonical secrets are `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`, `SONAR_TOKEN`, `SONAR_ORGANIZATION`, `SONAR_PROJECT_KEY`, and `GIT_TOKEN`.
+   - Backward-compatible aliases are accepted by scripts/workflow resolution: `DOCKER_USERNAME`, `DOCKER_PAT`, `SONAR_ORG`, and `SONAR_PROJECT`.
 
 2. **Run the platform locally**
    - Start and verify `k3s` on the target machine.

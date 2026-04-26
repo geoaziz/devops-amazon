@@ -126,6 +126,7 @@ Error: Invalid sonar.projectKey or sonar.organization
 ```
 **Solution:**
 - Verify secrets in GitHub: `SONAR_TOKEN`, `SONAR_ORGANIZATION`, `SONAR_PROJECT_KEY`
+- Legacy aliases also resolve: `SONAR_ORG`, `SONAR_PROJECT`
 - Check project exists in SonarCloud
 - Regenerate token if expired
 
@@ -135,6 +136,7 @@ Error: authentication failed, status: 401 Unauthorized
 ```
 **Solution:**
 - Verify `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` are correct
+- Legacy aliases also resolve: `DOCKER_USERNAME`, `DOCKER_PAT`
 - Check token hasn't expired
 - Regenerate token: Docker Hub → Account Settings → Security → New Access Token
 

@@ -35,6 +35,8 @@ Then follow the interactive prompts.
 | `SONAR_PROJECT_KEY` | SonarCloud project key |
 | `GIT_TOKEN` | GitHub Personal Access Token (with repo scope) |
 
+Compatibility note: the project also accepts legacy aliases during secret resolution (`DOCKER_USERNAME`, `DOCKER_PAT`, `SONAR_ORG`, `SONAR_PROJECT`), but the canonical names above are recommended.
+
 ### Step 2: Install k3s (2 mins)
 ```bash
 ./scripts/setup-k3s.sh

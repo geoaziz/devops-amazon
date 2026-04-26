@@ -73,12 +73,40 @@ check_env_var() {
     return 1
 }
 
+resolve_var_value() {
+    local primary="$1"
+    local fallback="$2"
+    local value="${!primary:-}"
+
+    if [[ -z "$value" && -n "$fallback" ]]; then
+        value="${!fallback:-}"
+    fi
+
+    printf '%s' "$value"
+}
+
 validate_sonar() {
     local ok=true
+    local sonar_org sonar_project
+
+    sonar_org="$(resolve_var_value "SONAR_ORGANIZATION" "SONAR_ORG")"
+    sonar_project="$(resolve_var_value "SONAR_PROJECT_KEY" "SONAR_PROJECT")"
 
     check_env_var "SONAR_TOKEN" || ok=false
-    check_env_var "SONAR_ORG" || ok=false
-    check_env_var "SONAR_PROJECT" || ok=false
+
+    if [[ -n "$sonar_org" ]]; then
+        print_result "Env var SONAR_ORGANIZATION/SONAR_ORG" "PASS"
+    else
+        print_result "Env var SONAR_ORGANIZATION/SONAR_ORG" "FAIL" "Not set"
+        ok=false
+    fi
+
+    if [[ -n "$sonar_project" ]]; then
+        print_result "Env var SONAR_PROJECT_KEY/SONAR_PROJECT" "PASS"
+    else
+        print_result "Env var SONAR_PROJECT_KEY/SONAR_PROJECT" "FAIL" "Not set"
+        ok=false
+    fi
 
     if [[ "$ok" != true ]]; then
         print_result "SonarCloud validation" "FAIL" "Missing SONAR_* variables"
@@ -94,10 +122,10 @@ validate_sonar() {
     fi
 
     local org_status
-    org_status="$(curl -sS -o /tmp/sonar_org_check.json -w "%{http_code}" -u "${SONAR_TOKEN}:" "https://sonarcloud.io/api/organizations/search?organizations=${SONAR_ORG}" || true)"
+    org_status="$(curl -sS -o /tmp/sonar_org_check.json -w "%{http_code}" -u "${SONAR_TOKEN}:" "https://sonarcloud.io/api/organizations/search?organizations=${sonar_org}" || true)"
     if [[ "$org_status" == "200" ]]; then
         if grep -q '"organizations"' /tmp/sonar_org_check.json 2>/dev/null; then
-            print_result "SonarCloud organization access" "PASS" "${SONAR_ORG}"
+            print_result "SonarCloud organization access" "PASS" "${sonar_org}"
         else
             print_result "SonarCloud organization access" "WARN" "Request succeeded but org not confirmed"
         fi
@@ -106,10 +134,10 @@ validate_sonar() {
     fi
 
     local project_status
-    project_status="$(curl -sS -o /tmp/sonar_project_check.json -w "%{http_code}" -u "${SONAR_TOKEN}:" "https://sonarcloud.io/api/components/show?component=${SONAR_PROJECT}" || true)"
+    project_status="$(curl -sS -o /tmp/sonar_project_check.json -w "%{http_code}" -u "${SONAR_TOKEN}:" "https://sonarcloud.io/api/components/show?component=${sonar_project}" || true)"
     if [[ "$project_status" == "200" ]]; then
         if grep -q '"component"' /tmp/sonar_project_check.json 2>/dev/null; then
-            print_result "SonarCloud project access" "PASS" "${SONAR_PROJECT}"
+            print_result "SonarCloud project access" "PASS" "${sonar_project}"
         else
             print_result "SonarCloud project access" "WARN" "Request succeeded but project not confirmed"
         fi
@@ -145,9 +173,24 @@ validate_github() {
 
 validate_dockerhub() {
     local ok=true
+    local docker_username docker_token
 
-    check_env_var "DOCKER_USERNAME" || ok=false
-    check_env_var "DOCKER_PAT" || ok=false
+    docker_username="$(resolve_var_value "DOCKERHUB_USERNAME" "DOCKER_USERNAME")"
+    docker_token="$(resolve_var_value "DOCKERHUB_TOKEN" "DOCKER_PAT")"
+
+    if [[ -n "$docker_username" ]]; then
+        print_result "Env var DOCKERHUB_USERNAME/DOCKER_USERNAME" "PASS"
+    else
+        print_result "Env var DOCKERHUB_USERNAME/DOCKER_USERNAME" "FAIL" "Not set"
+        ok=false
+    fi
+
+    if [[ -n "$docker_token" ]]; then
+        print_result "Env var DOCKERHUB_TOKEN/DOCKER_PAT" "PASS"
+    else
+        print_result "Env var DOCKERHUB_TOKEN/DOCKER_PAT" "FAIL" "Not set"
+        ok=false
+    fi
 
     if [[ "$ok" != true ]]; then
         print_result "Docker Hub validation" "FAIL" "Missing DOCKER_* variables"
@@ -158,10 +201,10 @@ validate_dockerhub() {
     status="$(curl -sS -o /tmp/docker_login_check.json -w "%{http_code}" \
         -H "Content-Type: application/json" \
         -X POST "https://hub.docker.com/v2/users/login/" \
-        -d "{\"username\":\"${DOCKER_USERNAME}\",\"password\":\"${DOCKER_PAT}\"}" || true)"
+        -d "{\"username\":\"${docker_username}\",\"password\":\"${docker_token}\"}" || true)"
 
     if [[ "$status" == "200" ]] && grep -q '"token"' /tmp/docker_login_check.json 2>/dev/null; then
-        print_result "Docker Hub PAT" "PASS" "Authenticated as ${DOCKER_USERNAME}"
+        print_result "Docker Hub PAT" "PASS" "Authenticated as ${docker_username}"
     else
         print_result "Docker Hub PAT" "FAIL" "HTTP ${status}"
     fi

@@ -44,23 +44,50 @@ jobs:
         run: npm install --legacy-peer-deps
         continue-on-error: true
 
+      - name: Validate SonarCloud configuration
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          missing=()
+
+          if [ -z "${{ secrets.SONAR_TOKEN }}" ]; then
+            missing+=("SONAR_TOKEN")
+          fi
+
+          if [ -z "${{ secrets.SONAR_ORGANIZATION }}" ] && [ -z "${{ secrets.SONAR_ORG }}" ]; then
+            missing+=("SONAR_ORGANIZATION or SONAR_ORG")
+          fi
+
+          if [ -z "${{ secrets.SONAR_PROJECT_KEY }}" ] && [ -z "${{ secrets.SONAR_PROJECT }}" ]; then
+            missing+=("SONAR_PROJECT_KEY or SONAR_PROJECT")
+          fi
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "Missing SonarCloud secrets: ${missing[*]}" >&2
+            exit 1
+          fi
+
+          echo "SonarCloud secrets found."
+
       # Step 3: SonarCloud Analysis
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_ORGANIZATION_RESOLVED: ${{ secrets.SONAR_ORGANIZATION != '' && secrets.SONAR_ORGANIZATION || secrets.SONAR_ORG }}
+          SONAR_PROJECT_KEY_RESOLVED: ${{ secrets.SONAR_PROJECT_KEY != '' && secrets.SONAR_PROJECT_KEY || secrets.SONAR_PROJECT }}
         with:
           args: >
-            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
-            -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
+            -Dsonar.projectKey=${{ env.SONAR_PROJECT_KEY_RESOLVED }}
+            -Dsonar.organization=${{ env.SONAR_ORGANIZATION_RESOLVED }}
         continue-on-error: true
       
       - name: Log SonarCloud Status
         run: |
           echo "✓ SonarCloud analysis complete"
           echo "  Token exists: ${{ secrets.SONAR_TOKEN != '' }}"
-          echo "  Organization: ${{ secrets.SONAR_ORGANIZATION }}"
+          echo "  Organization source: ${{ secrets.SONAR_ORGANIZATION != '' && 'SONAR_ORGANIZATION' || 'SONAR_ORG' }}"
+          echo "  Project source: ${{ secrets.SONAR_PROJECT_KEY != '' && 'SONAR_PROJECT_KEY' || 'SONAR_PROJECT' }}"
         continue-on-error: true
 
       # Step 4: Trivy Filesystem Scan
@@ -76,7 +103,7 @@ jobs:
 
       # Upload Trivy filesystem results
       - name: Upload Trivy filesystem results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'trivy-fs-results.sarif'
           category: 'trivy-fs-scan'
@@ -119,7 +146,7 @@ jobs:
 
       # Upload Trivy image results
       - name: Upload Trivy image results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'trivy-image-results.sarif'
           category: 'trivy-image-scan'
@@ -141,6 +168,15 @@ jobs:
           else
             echo "token=${{ secrets.DOCKER_PAT }}" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Log Docker credential source
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          echo "Docker credential source (values masked):"
+          echo "  DOCKERHUB_USERNAME present: ${{ secrets.DOCKERHUB_USERNAME != '' }}"
+          echo "  DOCKER_USERNAME present: ${{ secrets.DOCKER_USERNAME != '' }}"
+          echo "  DOCKERHUB_TOKEN present: ${{ secrets.DOCKERHUB_TOKEN != '' }}"
+          echo "  DOCKER_PAT present: ${{ secrets.DOCKER_PAT != '' }}"
 
       - name: Validate Docker Hub credentials exist
         run: |
