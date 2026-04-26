@@ -80,6 +80,8 @@ load_env_file() {
 
     key="${key#${key%%[![:space:]]*}}"
     key="${key%${key##*[![:space:]]}}"
+    value="${value#${value%%[![:space:]]*}}"
+    value="${value%${value##*[![:space:]]}}"
 
     if [[ ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
       echo "Skipping invalid variable name in .env: ${key}" >&2
@@ -125,6 +127,10 @@ resolve_value() {
   if [[ -z "$value" ]]; then
     value="$(prompt_value "$primary_name")"
   fi
+
+  value="${value%$'\r'}"
+  value="${value#${value%%[![:space:]]*}}"
+  value="${value%${value##*[![:space:]]}}"
 
   printf '%s' "$value"
 }

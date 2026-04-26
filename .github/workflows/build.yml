@@ -93,10 +93,18 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
+          token_fingerprint="$(printf '%s' "${SONAR_TOKEN}" | sha256sum | cut -c1-12)"
+          echo "SONAR_TOKEN fingerprint (sha256:12): ${token_fingerprint}"
+
           auth_resp="$(curl -sS --retry 4 --retry-all-errors --retry-delay 2 -u "${SONAR_TOKEN}:" "${{ env.SONAR_HOST_URL }}/api/authentication/validate" || true)"
           if [ -z "$auth_resp" ]; then
             echo "SonarCloud auth endpoint returned an empty response (possible transient network issue)." >&2
             exit 1
+          fi
+
+          auth_valid="$(echo "$auth_resp" | sed -n 's/.*"valid":\(true\|false\).*/\1/p')"
+          if [ -n "$auth_valid" ]; then
+            echo "SonarCloud auth valid flag: $auth_valid"
           fi
 
           if ! echo "$auth_resp" | grep -q '"valid":'; then
