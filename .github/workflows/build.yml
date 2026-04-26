@@ -86,12 +86,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_ORGANIZATION_RESOLVED: ${{ secrets.SONAR_ORGANIZATION != '' && secrets.SONAR_ORGANIZATION || secrets.SONAR_ORG }}
-          SONAR_PROJECT_KEY_RESOLVED: ${{ secrets.SONAR_PROJECT_KEY != '' && secrets.SONAR_PROJECT_KEY || secrets.SONAR_PROJECT }}
+          SONAR_HOST_URL: https://sonarcloud.io
         with:
           args: >
-            -Dsonar.projectKey=${{ env.SONAR_PROJECT_KEY_RESOLVED }}
-            -Dsonar.organization=${{ env.SONAR_ORGANIZATION_RESOLVED }}
+            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY != '' && secrets.SONAR_PROJECT_KEY || secrets.SONAR_PROJECT }}
+            -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION != '' && secrets.SONAR_ORGANIZATION || secrets.SONAR_ORG }}
         continue-on-error: true
       
       - name: Log SonarCloud Status
