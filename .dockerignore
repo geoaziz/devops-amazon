@@ -27,5 +27,6 @@ kubeconfig
 kubeconfig.yaml
 trivy-*.sarif
 scripts
+bin
 pipeline_script
 terraform

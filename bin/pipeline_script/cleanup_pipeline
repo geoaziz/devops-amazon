@@ -224,7 +224,7 @@ pipeline {
                     To completely stop AWS charges, run:
                     
                     1. SSH to bastion server
-                    2. cd terraform/eks_code/
+                    2. cd bin/terraform/eks_code/
                     3. terraform destroy
                     4. Type: yes
                     

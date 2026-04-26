@@ -255,8 +255,8 @@ k8s/
 - Environment variables
 
 ❌ **Changes that DON'T trigger deploy (still applied manually):**
-- Pipeline scripts in `pipeline_script/`
-- Terraform in `terraform/`
+- Archived pipeline scripts in `bin/pipeline_script/`
+- Archived Terraform in `bin/terraform/`
 - Source code in `src/` (unless you rebuild the Docker image)
 
 ---

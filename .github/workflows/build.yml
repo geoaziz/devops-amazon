@@ -31,6 +31,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       # Step 2: Install Node dependencies with caching
       - name: Setup Node.js
@@ -58,7 +59,7 @@ jobs:
       - name: Log SonarCloud Status
         run: |
           echo "✓ SonarCloud analysis complete"
-          echo "  Token exists: ${{ env.SONAR_TOKEN != '' }}"
+          echo "  Token exists: ${{ secrets.SONAR_TOKEN != '' }}"
           echo "  Organization: ${{ secrets.SONAR_ORGANIZATION }}"
         continue-on-error: true
 
@@ -176,6 +177,7 @@ jobs:
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
+          git remote set-url origin "https://x-access-token:${{ secrets.GIT_TOKEN }}@github.com/${{ github.repository }}.git"
           
           echo "Checking for changes..."
           if git diff --quiet k8s/deployment.yaml; then
@@ -186,15 +188,13 @@ jobs:
             git commit -m "chore: update image tag to ${{ github.run_number }} [skip ci]"
             
             echo "Pushing to main branch..."
-            git push origin main
+            git push origin HEAD:main
             
             echo ""
             echo "✓ Manifest update pushed successfully"
             echo "  New image tag: ${{ github.run_number }}"
             echo "  ArgoCD will sync within ~3 minutes"
           fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GIT_TOKEN }}
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
       # Step 12: Pipeline Summary

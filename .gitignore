@@ -63,3 +63,5 @@ FirstKeyValuePair.pem
 # Pipeline artifacts
 pipeline-artifacts/
 build-logs/
+.github/Analyse_Codebase_skill.md
+ARGOCD_SETUP_GUIDE.md
