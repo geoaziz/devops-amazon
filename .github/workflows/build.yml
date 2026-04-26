@@ -68,9 +68,21 @@ jobs:
 
           echo "SonarCloud secrets found."
 
+      - name: Validate SonarCloud token auth
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          auth_resp="$(curl -sS -u "${SONAR_TOKEN}:" "https://sonarcloud.io/api/authentication/validate" || true)"
+          if ! echo "$auth_resp" | grep -q '"valid":true'; then
+            echo "SONAR_TOKEN failed SonarCloud authentication. Rotate/rewrite the GitHub secret SONAR_TOKEN." >&2
+            exit 1
+          fi
+          echo "SonarCloud token authentication succeeded."
+
       # Step 3: SonarCloud Analysis
       - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@master
+        uses: SonarSource/sonarqube-scan-action@v5.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -103,7 +115,7 @@ jobs:
 
       # Upload Trivy filesystem results
       - name: Upload Trivy filesystem results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: 'trivy-fs-results.sarif'
           category: 'trivy-fs-scan'
@@ -146,7 +158,7 @@ jobs:
 
       # Upload Trivy image results
       - name: Upload Trivy image results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: 'trivy-image-results.sarif'
           category: 'trivy-image-scan'
@@ -186,6 +198,23 @@ jobs:
           fi
           echo "Docker Hub credentials found."
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+      - name: Validate Docker Hub credentials auth
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          status="$(curl -sS -o /tmp/docker_login_check.json -w "%{http_code}" \
+            -H "Content-Type: application/json" \
+            -X POST "https://hub.docker.com/v2/users/login/" \
+            -d "{\"username\":\"${{ steps.docker_creds.outputs.username }}\",\"password\":\"${{ steps.docker_creds.outputs.token }}\"}" || true)"
+
+          if [ "$status" != "200" ] || ! grep -q '"token"' /tmp/docker_login_check.json; then
+            echo "Docker Hub auth failed for provided GitHub secrets. Rotate/rewrite DOCKERHUB_TOKEN or DOCKER_PAT." >&2
+            rm -f /tmp/docker_login_check.json
+            exit 1
+          fi
+
+          rm -f /tmp/docker_login_check.json
+          echo "Docker Hub credential authentication succeeded."
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3

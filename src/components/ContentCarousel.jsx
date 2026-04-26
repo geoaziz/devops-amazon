@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import ReactDOM from "react-dom/client";
 import ContentTile from "./ContentTile";
 import ContentTileData from "./ContentTileData";
 import LeftArrowButton from "./LeftArrowButton";

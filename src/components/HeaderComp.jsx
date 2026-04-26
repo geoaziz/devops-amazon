@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import ReactDOM from "react-dom/client";
 import Categories from "./Categories";
 import HeaderCategoryLi from "./HeaderCategoryLi";
 import Languages from "./Languages";
@@ -35,7 +34,7 @@ function Header() {
       >
         <div className="header-div-2">
           <div className="header-div-3">
-            <a className="header-anchor" href="">
+            <a className="header-anchor" href="https://www.amazon.com/">
               <img
                 className="header-anchor-img"
                 src="https://m.media-amazon.com/images/G/01/digital/video/web/Logo-min.png"
@@ -47,7 +46,7 @@ function Header() {
                 <ol className="header-ol">
                   <li className="header-li header-li-position">
                     <label className="header-li-label">
-                      <a href="" className="header-li-anchor">
+                      <a href="https://www.amazon.com/" className="header-li-anchor">
                         Home
                         <div className="header-li-arrow-div">
                           <svg
@@ -64,7 +63,7 @@ function Header() {
                       <ul className="header-dropdown-list">
                         <li className="header-dropdown-listitem">
                           <a
-                            href=""
+                            href="https://www.amazon.com/"
                             className="header-dropdown-listitem-anchor"
                           >
                             All
@@ -72,7 +71,7 @@ function Header() {
                         </li>
                         <li className="header-dropdown-listitem">
                           <a
-                            href=""
+                            href="https://www.amazon.com/"
                             className="header-dropdown-listitem-anchor"
                           >
                             Movies
@@ -80,7 +79,7 @@ function Header() {
                         </li>
                         <li className="header-dropdown-listitem">
                           <a
-                            href=""
+                            href="https://www.amazon.com/"
                             className="header-dropdown-listitem-anchor"
                           >
                             TV shows
@@ -91,7 +90,7 @@ function Header() {
                   </li>
                   <li className="header-li header-li-position">
                     <label className="header-li-label">
-                      <a href="" className="header-li-anchor">
+                      <a href="https://www.amazon.com/" className="header-li-anchor">
                         Store
                         <div className="header-li-arrow-div">
                           <svg
@@ -108,7 +107,7 @@ function Header() {
                       <ul className="header-dropdown-list">
                         <li className="header-dropdown-listitem">
                           <a
-                            href=""
+                            href="https://www.amazon.com/"
                             className="header-dropdown-listitem-anchor"
                           >
                             All
@@ -116,7 +115,7 @@ function Header() {
                         </li>
                         <li className="header-dropdown-listitem">
                           <a
-                            href=""
+                            href="https://www.amazon.com/"
                             className="header-dropdown-listitem-anchor"
                           >
                             Rent
@@ -124,7 +123,7 @@ function Header() {
                         </li>
                         <li className="header-dropdown-listitem">
                           <a
-                            href=""
+                            href="https://www.amazon.com/"
                             className="header-dropdown-listitem-anchor"
                           >
                             Channels
@@ -135,14 +134,14 @@ function Header() {
                   </li>
                   <li className="header-li header-li-position">
                     <label className="header-li-label">
-                      <a href="" className="header-li-anchor">
+                      <a href="https://www.amazon.com/" className="header-li-anchor">
                         Live TV
                       </a>
                     </label>
                   </li>
                   <li className="header-li category-li">
                     <label className="header-li-label">
-                      <a href="" className="header-li-anchor">
+                      <a href="https://www.amazon.com/" className="header-li-anchor">
                         Categories
                         <div className="header-li-arrow-div">
                           <svg
@@ -189,7 +188,7 @@ function Header() {
                   </li>
                   <li className="header-li header-li-position">
                     <label className="header-li-label">
-                      <a href="" className="header-li-anchor">
+                      <a href="https://www.amazon.com/" className="header-li-anchor">
                         My Stuff
                         <div className="header-li-arrow-div">
                           <svg
@@ -206,7 +205,7 @@ function Header() {
                       <ul className="header-dropdown-list">
                         <li className="header-dropdown-listitem">
                           <a
-                            href=""
+                            href="https://www.amazon.com/"
                             className="header-dropdown-listitem-anchor"
                           >
                             All
@@ -214,7 +213,7 @@ function Header() {
                         </li>
                         <li className="header-dropdown-listitem">
                           <a
-                            href=""
+                            href="https://www.amazon.com/"
                             className="header-dropdown-listitem-anchor"
                           >
                             Watchlist
@@ -222,7 +221,7 @@ function Header() {
                         </li>
                         <li className="header-dropdown-listitem">
                           <a
-                            href=""
+                            href="https://www.amazon.com/"
                             className="header-dropdown-listitem-anchor"
                           >
                             Rentals
@@ -285,19 +284,19 @@ function Header() {
                         <label className="qwert-label">Your Account</label>
                         <ul className="header-nav-profileinfo-ul">
                           <li className="header-nav-profileinfo-ul-li">
-                            <a href="">Help</a>
+                            <a href="https://www.amazon.com/">Help</a>
                           </li>
                           <li className="header-nav-profileinfo-ul-li">
-                            <a href="">Watch Anywhere</a>
+                            <a href="https://www.amazon.com/">Watch Anywhere</a>
                           </li>
                           <li className="header-nav-profileinfo-ul-li">
-                            <a href="">Account & Settings</a>
+                            <a href="https://www.amazon.com/">Account & Settings</a>
                           </li>
                           <li className="header-nav-profileinfo-ul-li">
-                            <a href="">Prime Benefits</a>
+                            <a href="https://www.amazon.com/">Prime Benefits</a>
                           </li>
                           <li className="header-nav-profileinfo-ul-li">
-                            <a href="">Sign out</a>
+                            <a href="https://www.amazon.com/">Sign out</a>
                           </li>
                         </ul>
                       </div>
@@ -305,16 +304,16 @@ function Header() {
                         <label className="qwert-label">Profiles</label>
                         <ul className="header-nav-profileinfo-ul">
                           <li className="header-nav-profileinfo-ul-li">
-                            <a href="">Profile A</a>
+                            <a href="https://www.amazon.com/">Profile A</a>
                           </li>
                           <li className="header-nav-profileinfo-ul-li">
-                            <a href="">Profile B</a>
+                            <a href="https://www.amazon.com/">Profile B</a>
                           </li>
                           <li className="header-nav-profileinfo-ul-li">
-                            <a href="">Profile C</a>
+                            <a href="https://www.amazon.com/">Profile C</a>
                           </li>
                           <li className="header-nav-profileinfo-ul-li add-button">
-                            <a href="">
+                            <a href="https://www.amazon.com/">
                               <span className="header-nav-add-profile-span-1"></span>
                               <span className="header-nav-add-profile-span-2">
                                 Add new
@@ -322,10 +321,10 @@ function Header() {
                             </a>
                           </li>
                           <li className="header-nav-profileinfo-ul-li">
-                            <a href="">Manage profiles</a>
+                            <a href="https://www.amazon.com/">Manage profiles</a>
                           </li>
                           <li className="header-nav-profileinfo-ul-li">
-                            <a href="">Learn more</a>
+                            <a href="https://www.amazon.com/">Learn more</a>
                           </li>
                         </ul>
                       </div>
