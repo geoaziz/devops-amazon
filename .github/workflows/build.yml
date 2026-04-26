@@ -93,19 +93,39 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
-          auth_resp="$(curl -sS -u "${SONAR_TOKEN}:" "${{ env.SONAR_HOST_URL }}/api/authentication/validate" || true)"
+          auth_resp="$(curl -sS --retry 4 --retry-all-errors --retry-delay 2 -u "${SONAR_TOKEN}:" "${{ env.SONAR_HOST_URL }}/api/authentication/validate" || true)"
+          if [ -z "$auth_resp" ]; then
+            echo "SonarCloud auth endpoint returned an empty response (possible transient network issue)." >&2
+            exit 1
+          fi
+
+          if ! echo "$auth_resp" | grep -q '"valid":'; then
+            echo "Unexpected SonarCloud auth response: $auth_resp" >&2
+            exit 1
+          fi
+
           if ! echo "$auth_resp" | grep -q '"valid":true'; then
             echo "SONAR_TOKEN failed SonarCloud authentication. Rotate/rewrite the GitHub secret SONAR_TOKEN." >&2
             exit 1
           fi
 
-          org_resp="$(curl -sS -u "${SONAR_TOKEN}:" "${{ env.SONAR_HOST_URL }}/api/organizations/search?organizations=${{ steps.sonar_cfg.outputs.org }}" || true)"
+          org_resp="$(curl -sS --retry 4 --retry-all-errors --retry-delay 2 -u "${SONAR_TOKEN}:" "${{ env.SONAR_HOST_URL }}/api/organizations/search?organizations=${{ steps.sonar_cfg.outputs.org }}" || true)"
+          if [ -z "$org_resp" ]; then
+            echo "SonarCloud organization check returned an empty response (possible transient network issue)." >&2
+            exit 1
+          fi
+
           if ! echo "$org_resp" | grep -q '"organizations"'; then
             echo "SONAR_TOKEN could not access SonarCloud organization: ${{ steps.sonar_cfg.outputs.org }}" >&2
             exit 1
           fi
 
-          project_resp="$(curl -sS -u "${SONAR_TOKEN}:" "${{ env.SONAR_HOST_URL }}/api/components/show?component=${{ steps.sonar_cfg.outputs.project }}" || true)"
+          project_resp="$(curl -sS --retry 4 --retry-all-errors --retry-delay 2 -u "${SONAR_TOKEN}:" "${{ env.SONAR_HOST_URL }}/api/components/show?component=${{ steps.sonar_cfg.outputs.project }}" || true)"
+          if [ -z "$project_resp" ]; then
+            echo "SonarCloud project check returned an empty response (possible transient network issue)." >&2
+            exit 1
+          fi
+
           if ! echo "$project_resp" | grep -q '"component"'; then
             echo "SONAR_TOKEN could not access SonarCloud project: ${{ steps.sonar_cfg.outputs.project }}" >&2
             exit 1
@@ -157,7 +177,7 @@ jobs:
         with:
           sarif_file: 'trivy-fs-results.sarif'
           category: 'trivy-fs-scan'
-        if: always()
+        if: always() && hashFiles('trivy-fs-results.sarif') != ''
         continue-on-error: true
 
       # Step 5: Set up Docker Buildx with caching
@@ -202,7 +222,7 @@ jobs:
         with:
           sarif_file: 'trivy-image-results.sarif'
           category: 'trivy-image-scan'
-        if: always()
+        if: always() && hashFiles('trivy-image-results.sarif') != ''
         continue-on-error: true
 
       # Step 8: Login to Docker Hub
