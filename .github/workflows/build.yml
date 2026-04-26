@@ -127,11 +127,35 @@ jobs:
         continue-on-error: true
 
       # Step 8: Login to Docker Hub
+      - name: Resolve Docker Hub credentials
+        id: docker_creds
+        run: |
+          if [ -n "${{ secrets.DOCKERHUB_USERNAME }}" ]; then
+            echo "username=${{ secrets.DOCKERHUB_USERNAME }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "username=${{ secrets.DOCKER_USERNAME }}" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [ -n "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
+            echo "token=${{ secrets.DOCKERHUB_TOKEN }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "token=${{ secrets.DOCKER_PAT }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate Docker Hub credentials exist
+        run: |
+          if [ -z "${{ steps.docker_creds.outputs.username }}" ] || [ -z "${{ steps.docker_creds.outputs.token }}" ]; then
+            echo "Missing Docker Hub secrets. Set either DOCKERHUB_USERNAME/DOCKERHUB_TOKEN or DOCKER_USERNAME/DOCKER_PAT." >&2
+            exit 1
+          fi
+          echo "Docker Hub credentials found."
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ steps.docker_creds.outputs.username }}
+          password: ${{ steps.docker_creds.outputs.token }}
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       
       - name: Log Docker Login Status

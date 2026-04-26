@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+if [ -z "${BASH_VERSION:-}" ]; then
+  exec bash "$0" "$@"
+fi
+
 set -euo pipefail
 
 usage() {
@@ -22,6 +26,67 @@ require_command() {
     echo "Missing required command: $1" >&2
     exit 1
   fi
+}
+
+normalize_repo() {
+  local input="$1"
+  local normalized="$input"
+
+  if [[ -z "$normalized" ]]; then
+    printf '%s' "$normalized"
+    return 0
+  fi
+
+  if [[ "$normalized" =~ github.com[:/]([^[:space:]]+)$ ]]; then
+    normalized="${BASH_REMATCH[1]}"
+  fi
+
+  normalized="${normalized%.git}"
+  normalized="${normalized#/}"
+
+  printf '%s' "$normalized"
+}
+
+load_env_file() {
+  local script_dir repo_root env_file
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  repo_root="$(cd "${script_dir}/.." && pwd)"
+  env_file="${repo_root}/.env"
+
+  if [[ ! -f "$env_file" ]]; then
+    echo "No .env file found at ${env_file}; script will prompt for missing values."
+    return 0
+  fi
+
+  # Parse simple KEY=VALUE lines so .env works even with CRLF and comments.
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    local key value
+
+    line="${line%$'\r'}"
+    [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ "$line" != *=* ]] && continue
+
+    key="${line%%=*}"
+    value="${line#*=}"
+
+    key="${key#${key%%[![:space:]]*}}"
+    key="${key%${key##*[![:space:]]}}"
+
+    if [[ ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+      echo "Skipping invalid variable name in .env: ${key}" >&2
+      continue
+    fi
+
+    if [[ "$value" =~ ^\".*\"$ ]]; then
+      value="${value:1:${#value}-2}"
+    elif [[ "$value" =~ ^\'.*\'$ ]]; then
+      value="${value:1:${#value}-2}"
+    fi
+
+    export "$key=$value"
+  done < "$env_file"
+
+  echo "Loaded environment from ${env_file}"
 }
 
 prompt_value() {
@@ -65,6 +130,7 @@ set_secret() {
 }
 
 repo="${GITHUB_REPOSITORY:-}"
+repo="$(normalize_repo "$repo")"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -84,13 +150,23 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Fix: load repo-root .env so values are available even if not exported in shell
+load_env_file
+
 if [[ -z "$repo" ]]; then
   if command -v git >/dev/null 2>&1; then
     remote_url="$(git remote get-url origin 2>/dev/null || true)"
-    if [[ "$remote_url" =~ github.com[:/](.+/.+)(\.git)?$ ]]; then
+    if [[ "$remote_url" =~ github.com[:/]([^[:space:]]+)$ ]]; then
       repo="${BASH_REMATCH[1]}"
     fi
   fi
+fi
+
+repo="$(normalize_repo "$repo")"
+
+if [[ -n "$repo" && ! "$repo" =~ ^[^/]+/[^/]+$ ]]; then
+  echo "Repository format is invalid: ${repo}. Expected owner/name." >&2
+  exit 1
 fi
 
 if [[ -z "$repo" ]]; then

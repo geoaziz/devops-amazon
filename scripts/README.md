@@ -12,6 +12,7 @@ All setup and automation scripts are located in the `scripts/` directory.
 | `setup-monitoring.sh` | Install Prometheus & Grafana | First time (part of setup-all.sh) |
 | `test-pipeline.sh` | Verify all components | After setup, before testing |
 | `validate.sh` | Check system configuration | Troubleshooting |
+| `validate-creds.sh` | Validate Sonar/GitHub/Docker credentials | Before running CI/CD |
 | `port-forward.sh` | Start all port-forwards | Every session |
 | `cleanup.sh` | Remove all k8s components | Reset or cleanup |
 
@@ -202,6 +203,33 @@ All setup and automation scripts are located in the `scripts/` directory.
 - Troubleshooting issues
 - After major changes
 - Before reporting issues
+
+---
+
+### validate-creds.sh
+**Validates SonarCloud, GitHub, and Docker Hub credentials used by CI/CD.**
+
+```bash
+./scripts/validate-creds.sh
+```
+
+**Expected environment variables:**
+- `SONAR_TOKEN`
+- `SONAR_ORG`
+- `SONAR_PROJECT`
+- `GIT_TOKEN`
+- `DOCKER_USERNAME`
+- `DOCKER_PAT`
+
+**What it checks:**
+1. SonarCloud token validity
+2. SonarCloud organization and project accessibility
+3. GitHub token authentication
+4. Docker Hub PAT authentication
+
+**Notes:**
+- Automatically loads `.env` from repo root if present.
+- Prints only pass/fail status and service identity, never token values.
 
 ---
 
