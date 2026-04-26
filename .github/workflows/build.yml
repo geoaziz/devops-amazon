@@ -11,6 +11,7 @@ on:
 env:
   REGISTRY: docker.io
   IMAGE_NAME: devmahn/amazon-clone-app
+  SONAR_HOST_URL: https://sonarcloud.io
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -44,6 +45,22 @@ jobs:
         run: npm install --legacy-peer-deps
         continue-on-error: true
 
+      - name: Resolve SonarCloud settings
+        id: sonar_cfg
+        run: |
+          org="${{ secrets.SONAR_ORGANIZATION }}"
+          if [ -z "$org" ]; then
+            org="${{ secrets.SONAR_ORG }}"
+          fi
+
+          project="${{ secrets.SONAR_PROJECT_KEY }}"
+          if [ -z "$project" ]; then
+            project="${{ secrets.SONAR_PROJECT }}"
+          fi
+
+          echo "org=$org" >> "$GITHUB_OUTPUT"
+          echo "project=$project" >> "$GITHUB_OUTPUT"
+
       - name: Validate SonarCloud configuration
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
@@ -53,11 +70,11 @@ jobs:
             missing+=("SONAR_TOKEN")
           fi
 
-          if [ -z "${{ secrets.SONAR_ORGANIZATION }}" ] && [ -z "${{ secrets.SONAR_ORG }}" ]; then
+          if [ -z "${{ steps.sonar_cfg.outputs.org }}" ]; then
             missing+=("SONAR_ORGANIZATION or SONAR_ORG")
           fi
 
-          if [ -z "${{ secrets.SONAR_PROJECT_KEY }}" ] && [ -z "${{ secrets.SONAR_PROJECT }}" ]; then
+          if [ -z "${{ steps.sonar_cfg.outputs.project }}" ]; then
             missing+=("SONAR_PROJECT_KEY or SONAR_PROJECT")
           fi
 
@@ -67,42 +84,64 @@ jobs:
           fi
 
           echo "SonarCloud secrets found."
+          echo "Resolved sonar.organization: ${{ steps.sonar_cfg.outputs.org }}"
+          echo "Resolved sonar.projectKey: ${{ steps.sonar_cfg.outputs.project }}"
+          echo "Resolved sonar.host.url: ${{ env.SONAR_HOST_URL }}"
 
       - name: Validate SonarCloud token auth
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
-          auth_resp="$(curl -sS -u "${SONAR_TOKEN}:" "https://sonarcloud.io/api/authentication/validate" || true)"
+          auth_resp="$(curl -sS -u "${SONAR_TOKEN}:" "${{ env.SONAR_HOST_URL }}/api/authentication/validate" || true)"
           if ! echo "$auth_resp" | grep -q '"valid":true'; then
             echo "SONAR_TOKEN failed SonarCloud authentication. Rotate/rewrite the GitHub secret SONAR_TOKEN." >&2
             exit 1
           fi
+
+          org_resp="$(curl -sS -u "${SONAR_TOKEN}:" "${{ env.SONAR_HOST_URL }}/api/organizations/search?organizations=${{ steps.sonar_cfg.outputs.org }}" || true)"
+          if ! echo "$org_resp" | grep -q '"organizations"'; then
+            echo "SONAR_TOKEN could not access SonarCloud organization: ${{ steps.sonar_cfg.outputs.org }}" >&2
+            exit 1
+          fi
+
+          project_resp="$(curl -sS -u "${SONAR_TOKEN}:" "${{ env.SONAR_HOST_URL }}/api/components/show?component=${{ steps.sonar_cfg.outputs.project }}" || true)"
+          if ! echo "$project_resp" | grep -q '"component"'; then
+            echo "SONAR_TOKEN could not access SonarCloud project: ${{ steps.sonar_cfg.outputs.project }}" >&2
+            exit 1
+          fi
+
           echo "SonarCloud token authentication succeeded."
 
       # Step 3: SonarCloud Analysis
       - name: SonarCloud Scan
+        id: sonar_scan
         uses: SonarSource/sonarqube-scan-action@v5.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: https://sonarcloud.io
+          SONAR_HOST_URL: ${{ env.SONAR_HOST_URL }}
         with:
           args: >
-            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY != '' && secrets.SONAR_PROJECT_KEY || secrets.SONAR_PROJECT }}
-            -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION != '' && secrets.SONAR_ORGANIZATION || secrets.SONAR_ORG }}
-        continue-on-error: true
+            -Dsonar.host.url=${{ env.SONAR_HOST_URL }}
+            -Dsonar.token=${{ secrets.SONAR_TOKEN }}
+            -Dsonar.projectKey=${{ steps.sonar_cfg.outputs.project }}
+            -Dsonar.organization=${{ steps.sonar_cfg.outputs.org }}
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
       
       - name: Log SonarCloud Status
+        if: always()
         run: |
-          echo "✓ SonarCloud analysis complete"
+          echo "SonarCloud config step outcome: ${{ steps.sonar_cfg.outcome }}"
+          echo "SonarCloud scan outcome: ${{ steps.sonar_scan.outcome }}"
           echo "  Token exists: ${{ secrets.SONAR_TOKEN != '' }}"
-          echo "  Organization source: ${{ secrets.SONAR_ORGANIZATION != '' && 'SONAR_ORGANIZATION' || 'SONAR_ORG' }}"
-          echo "  Project source: ${{ secrets.SONAR_PROJECT_KEY != '' && 'SONAR_PROJECT_KEY' || 'SONAR_PROJECT' }}"
-        continue-on-error: true
+          echo "  Resolved organization: ${{ steps.sonar_cfg.outputs.org }}"
+          echo "  Resolved projectKey: ${{ steps.sonar_cfg.outputs.project }}"
+          echo "  Host URL: ${{ env.SONAR_HOST_URL }}"
 
       # Step 4: Trivy Filesystem Scan
       - name: Run Trivy filesystem scan
+        id: trivy_fs_scan
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
@@ -127,6 +166,7 @@ jobs:
 
       # Step 6: Build Docker image with build number tag
       - name: Build Docker image
+        id: docker_build
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -147,6 +187,7 @@ jobs:
 
       # Step 7: Trivy Image Scan
       - name: Run Trivy image scan
+        id: trivy_image_scan
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.IMAGE_NAME }}:${{ github.run_number }}
@@ -228,6 +269,7 @@ jobs:
 
       # Step 9: Push Docker image to Docker Hub
       - name: Push Docker image to Docker Hub
+        id: docker_push
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -298,6 +340,16 @@ jobs:
           echo "Branch: ${{ github.ref }}"
           echo "Commit: ${{ github.sha }}"
           echo "Actor: ${{ github.actor }}"
+          echo ""
+          echo "Stage outcomes:"
+          echo "  - Sonar config: ${{ steps.sonar_cfg.outcome }}"
+          echo "  - Sonar scan: ${{ steps.sonar_scan.outcome }}"
+          echo "  - Trivy filesystem scan: ${{ steps.trivy_fs_scan.outcome }}"
+          echo "  - Docker build: ${{ steps.docker_build.outcome }}"
+          echo "  - Trivy image scan: ${{ steps.trivy_image_scan.outcome }}"
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "  - Docker push: ${{ steps.docker_push.outcome }}"
+          fi
           echo ""
           if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
             echo "✓ Production Pipeline Executed"

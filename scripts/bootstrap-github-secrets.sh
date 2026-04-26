@@ -6,6 +6,9 @@ fi
 
 set -euo pipefail
 
+MAX_RETRIES="${MAX_RETRIES:-4}"
+RETRY_DELAY_SECONDS="${RETRY_DELAY_SECONDS:-2}"
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -130,9 +133,34 @@ set_secret() {
   local repo="$1"
   local secret_name="$2"
   local secret_value="$3"
+  local attempt=1
+  local last_error=""
 
-  printf '%s' "$secret_value" | gh secret set "$secret_name" --repo "$repo" --body - >/dev/null
-  echo "Set ${secret_name}"
+  while (( attempt <= MAX_RETRIES )); do
+    if printf '%s' "$secret_value" | gh secret set "$secret_name" --repo "$repo" --body - >/dev/null 2>/tmp/bootstrap-secret-error.log; then
+      echo "Set ${secret_name}"
+      rm -f /tmp/bootstrap-secret-error.log
+      return 0
+    fi
+
+    last_error="$(cat /tmp/bootstrap-secret-error.log 2>/dev/null || true)"
+    rm -f /tmp/bootstrap-secret-error.log
+
+    if (( attempt == MAX_RETRIES )); then
+      echo "Failed to set ${secret_name} after ${MAX_RETRIES} attempts." >&2
+      if [[ -n "$last_error" ]]; then
+        echo "$last_error" >&2
+      fi
+      return 1
+    fi
+
+    echo "Attempt ${attempt}/${MAX_RETRIES} failed while setting ${secret_name}. Retrying..." >&2
+    if [[ -n "$last_error" ]]; then
+      echo "$last_error" >&2
+    fi
+    sleep "$(( RETRY_DELAY_SECONDS * attempt ))"
+    attempt=$(( attempt + 1 ))
+  done
 }
 
 repo="${GITHUB_REPOSITORY:-}"
