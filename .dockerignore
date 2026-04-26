@@ -1,0 +1,31 @@
+# Docker Build Context Configuration
+# This file specifies what to exclude from the Docker build context
+
+# Exclude unnecessary files to speed up build
+.git
+.github
+.gitignore
+README.md
+DEVOPS_PIPELINE_SETUP.md
+*.md
+.DS_Store
+*.log
+.env.local
+node_modules
+coverage
+build
+dist
+.terraform
+terraform
+pipeline_script
+Project_WriteUp.docx
+.terraform
+.terraform.lock.hcl
+*.tfstate*
+FirstKeyValuePair.pem
+kubeconfig
+kubeconfig.yaml
+trivy-*.sarif
+scripts
+pipeline_script
+terraform

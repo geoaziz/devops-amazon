@@ -1,4 +1,50 @@
 
+# dependencies
+node_modules/
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# production
+/build
+/dist
+
+# misc
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment files
+.env
+.env.*.local
+
+# OS
+Thumbs.db
+*.log
+
+# Scanning results
+trivy-fs-results.sarif
+trivy-image-results.sarif
+
+# k3s
+/kubeconfig
+kubeconfig.yaml
+
 # Terraform state and backup files
 *.tfstate
 *.tfstate.*
@@ -13,3 +59,7 @@ crash.log
 
 # Sensitive files
 FirstKeyValuePair.pem
+
+# Pipeline artifacts
+pipeline-artifacts/
+build-logs/
