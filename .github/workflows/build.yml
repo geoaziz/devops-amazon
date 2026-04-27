@@ -299,18 +299,12 @@ jobs:
       - name: Validate Docker Hub credentials auth
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          status="$(curl -sS -o /tmp/docker_login_check.json -w "%{http_code}" \
-            -H "Content-Type: application/json" \
-            -X POST "https://hub.docker.com/v2/users/login/" \
-            -d "{\"username\":\"${{ steps.docker_creds.outputs.username }}\",\"password\":\"${{ steps.docker_creds.outputs.token }}\"}" || true)"
-
-          if [ "$status" != "200" ] || ! grep -q '"token"' /tmp/docker_login_check.json; then
+          if ! printf '%s' "${{ steps.docker_creds.outputs.token }}" | docker login --username "${{ steps.docker_creds.outputs.username }}" --password-stdin >/dev/null 2>&1; then
             echo "Docker Hub auth failed for provided GitHub secrets. Rotate/rewrite DOCKERHUB_TOKEN or DOCKER_PAT." >&2
-            rm -f /tmp/docker_login_check.json
             exit 1
           fi
 
-          rm -f /tmp/docker_login_check.json
+          docker logout >/dev/null 2>&1 || true
           echo "Docker Hub credential authentication succeeded."
 
       - name: Login to Docker Hub
