@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: amazon-prime-container
-        image: devmahn/amazon-clone-app:latest
+        image: devmahn/amazon-clone-app:14
         imagePullPolicy: Always
         ports:
         - containerPort: 3000
