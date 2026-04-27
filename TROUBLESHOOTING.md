@@ -130,6 +130,18 @@ Error: Invalid sonar.projectKey or sonar.organization
 - Check project exists in SonarCloud
 - Regenerate token if expired
 
+#### SonarCloud Fails With Automatic Analysis Conflict
+```
+ERROR You are running CI analysis while Automatic Analysis is enabled.
+```
+**Solution:**
+- Keep CI scanner as source of truth for this repo.
+- Disable SonarCloud Automatic Analysis in project settings.
+- Re-run workflow and confirm Sonar steps pass:
+  - `Resolve SonarCloud settings`
+  - `Validate SonarCloud token auth`
+  - `SonarCloud Scan`
+
 #### Docker Login Fails
 ```
 Error: authentication failed, status: 401 Unauthorized

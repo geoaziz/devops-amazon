@@ -88,6 +88,28 @@ jobs:
           echo "Resolved sonar.projectKey: ${{ steps.sonar_cfg.outputs.project }}"
           echo "Resolved sonar.host.url: ${{ env.SONAR_HOST_URL }}"
 
+      - name: Validate SonarCloud config consistency
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          prop_org="$(sed -n 's/^sonar.organization=//p' sonar-project.properties | head -1)"
+          prop_project="$(sed -n 's/^sonar.projectKey=//p' sonar-project.properties | head -1)"
+
+          if [ -n "$prop_org" ] && [ "$prop_org" != "${{ steps.sonar_cfg.outputs.org }}" ]; then
+            echo "Organization mismatch detected between sonar-project.properties and resolved secrets." >&2
+            echo "  sonar-project.properties: $prop_org" >&2
+            echo "  resolved secret value: ${{ steps.sonar_cfg.outputs.org }}" >&2
+            exit 1
+          fi
+
+          if [ -n "$prop_project" ] && [ "$prop_project" != "${{ steps.sonar_cfg.outputs.project }}" ]; then
+            echo "WARNING: Project key mismatch detected." >&2
+            echo "  sonar-project.properties: $prop_project" >&2
+            echo "  resolved secret value: ${{ steps.sonar_cfg.outputs.project }}" >&2
+            echo "  Scanner uses resolved secret value from workflow args." >&2
+          else
+            echo "SonarCloud project key consistency check passed."
+          fi
+
       - name: Validate SonarCloud token auth
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
@@ -96,49 +118,50 @@ jobs:
           token_fingerprint="$(printf '%s' "${SONAR_TOKEN}" | sha256sum | cut -c1-12)"
           echo "SONAR_TOKEN fingerprint (sha256:12): ${token_fingerprint}"
 
-          auth_resp="$(curl -sS --retry 4 --retry-all-errors --retry-delay 2 -u "${SONAR_TOKEN}:" "${{ env.SONAR_HOST_URL }}/api/authentication/validate" || true)"
-          if [ -z "$auth_resp" ]; then
-            echo "SonarCloud auth endpoint returned an empty response (possible transient network issue)." >&2
+          auth_status="$(curl -sS --retry 4 --retry-all-errors --retry-delay 2 -o /tmp/sonar_auth_check.json -w "%{http_code}" -u "${SONAR_TOKEN}:" "${{ env.SONAR_HOST_URL }}/api/authentication/validate" || true)"
+          if [ "$auth_status" != "200" ]; then
+            echo "SonarCloud auth endpoint failed. HTTP ${auth_status}" >&2
             exit 1
           fi
 
-          auth_valid="$(echo "$auth_resp" | sed -n 's/.*"valid":\(true\|false\).*/\1/p')"
+          auth_valid="$(sed -n 's/.*"valid":\(true\|false\).*/\1/p' /tmp/sonar_auth_check.json)"
           if [ -n "$auth_valid" ]; then
             echo "SonarCloud auth valid flag: $auth_valid"
           fi
 
-          if ! echo "$auth_resp" | grep -q '"valid":'; then
-            echo "Unexpected SonarCloud auth response: $auth_resp" >&2
+          if ! grep -q '"valid":' /tmp/sonar_auth_check.json; then
+            echo "Unexpected SonarCloud auth response." >&2
             exit 1
           fi
 
-          if ! echo "$auth_resp" | grep -q '"valid":true'; then
+          if ! grep -q '"valid":true' /tmp/sonar_auth_check.json; then
             echo "SONAR_TOKEN failed SonarCloud authentication. Rotate/rewrite the GitHub secret SONAR_TOKEN." >&2
             exit 1
           fi
 
-          org_resp="$(curl -sS --retry 4 --retry-all-errors --retry-delay 2 -u "${SONAR_TOKEN}:" "${{ env.SONAR_HOST_URL }}/api/organizations/search?organizations=${{ steps.sonar_cfg.outputs.org }}" || true)"
-          if [ -z "$org_resp" ]; then
-            echo "SonarCloud organization check returned an empty response (possible transient network issue)." >&2
+          org_status="$(curl -sS --retry 4 --retry-all-errors --retry-delay 2 -o /tmp/sonar_org_check.json -w "%{http_code}" -u "${SONAR_TOKEN}:" "${{ env.SONAR_HOST_URL }}/api/organizations/search?organizations=${{ steps.sonar_cfg.outputs.org }}" || true)"
+          if [ "$org_status" != "200" ]; then
+            echo "SonarCloud organization check failed. HTTP ${org_status}" >&2
             exit 1
           fi
 
-          if ! echo "$org_resp" | grep -q '"organizations"'; then
+          if ! grep -q '"organizations"' /tmp/sonar_org_check.json; then
             echo "SONAR_TOKEN could not access SonarCloud organization: ${{ steps.sonar_cfg.outputs.org }}" >&2
             exit 1
           fi
 
-          project_resp="$(curl -sS --retry 4 --retry-all-errors --retry-delay 2 -u "${SONAR_TOKEN}:" "${{ env.SONAR_HOST_URL }}/api/components/show?component=${{ steps.sonar_cfg.outputs.project }}" || true)"
-          if [ -z "$project_resp" ]; then
-            echo "SonarCloud project check returned an empty response (possible transient network issue)." >&2
+          project_status="$(curl -sS --retry 4 --retry-all-errors --retry-delay 2 -o /tmp/sonar_project_check.json -w "%{http_code}" -u "${SONAR_TOKEN}:" "${{ env.SONAR_HOST_URL }}/api/components/show?component=${{ steps.sonar_cfg.outputs.project }}" || true)"
+          if [ "$project_status" != "200" ]; then
+            echo "SonarCloud project check failed. HTTP ${project_status}" >&2
             exit 1
           fi
 
-          if ! echo "$project_resp" | grep -q '"component"'; then
+          if ! grep -q '"component"' /tmp/sonar_project_check.json; then
             echo "SONAR_TOKEN could not access SonarCloud project: ${{ steps.sonar_cfg.outputs.project }}" >&2
             exit 1
           fi
 
+          rm -f /tmp/sonar_auth_check.json /tmp/sonar_org_check.json /tmp/sonar_project_check.json
           echo "SonarCloud token authentication succeeded."
 
       # Step 3: SonarCloud Analysis

@@ -208,6 +208,7 @@ kubectl port-forward svc/amazon-prime-app 3001:3000
 - SonarCloud might need initial project setup
 - Check GitHub Actions logs for exact error
 - Configure continues-on-error in workflow (already set)
+- If logs show `You are running CI analysis while Automatic Analysis is enabled`, disable SonarCloud Automatic Analysis for the project and keep CI analysis enabled
 
 ### No changes visible after deployment
 ```bash
