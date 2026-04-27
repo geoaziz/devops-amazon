@@ -299,11 +299,30 @@ jobs:
       - name: Validate Docker Hub credentials auth
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          if ! printf '%s' "${{ steps.docker_creds.outputs.token }}" | docker login --username "${{ steps.docker_creds.outputs.username }}" --password-stdin >/dev/null 2>&1; then
-            echo "Docker Hub auth failed for provided GitHub secrets. Rotate/rewrite DOCKERHUB_TOKEN or DOCKER_PAT." >&2
+          username="$(printf '%s' "${{ steps.docker_creds.outputs.username }}" | tr -d '\r\n')"
+          token="$(printf '%s' "${{ steps.docker_creds.outputs.token }}" | tr -d '\r\n')"
+
+          if [ -z "$username" ] || [ -z "$token" ]; then
+            echo "Docker Hub auth failed: username or token became empty after normalization." >&2
             exit 1
           fi
 
+          echo "Docker auth diagnostics (safe): username_length=${#username}, token_length=${#token}"
+
+          if ! printf '%s' "$token" | docker login --username "$username" --password-stdin >/tmp/docker_login_stdout.log 2>/tmp/docker_login_stderr.log; then
+            echo "Docker Hub auth failed for provided GitHub secrets. Rotate/rewrite DOCKERHUB_TOKEN or DOCKER_PAT." >&2
+            if [ -s /tmp/docker_login_stderr.log ]; then
+              echo "docker login stderr:" >&2
+              cat /tmp/docker_login_stderr.log >&2
+            fi
+            if [ -s /tmp/docker_login_stdout.log ]; then
+              echo "docker login stdout:" >&2
+              cat /tmp/docker_login_stdout.log >&2
+            fi
+            exit 1
+          fi
+
+          rm -f /tmp/docker_login_stdout.log /tmp/docker_login_stderr.log
           docker logout >/dev/null 2>&1 || true
           echo "Docker Hub credential authentication succeeded."
 
