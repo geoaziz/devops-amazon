@@ -48,12 +48,18 @@ jobs:
       - name: Resolve SonarCloud settings
         id: sonar_cfg
         run: |
-          org="${{ secrets.SONAR_ORGANIZATION }}"
+          org="$(sed -n 's/^sonar.organization=//p' sonar-project.properties | head -1)"
+          if [ -z "$org" ]; then
+            org="${{ secrets.SONAR_ORGANIZATION }}"
+          fi
           if [ -z "$org" ]; then
             org="${{ secrets.SONAR_ORG }}"
           fi
 
-          project="${{ secrets.SONAR_PROJECT_KEY }}"
+          project="$(sed -n 's/^sonar.projectKey=//p' sonar-project.properties | head -1)"
+          if [ -z "$project" ]; then
+            project="${{ secrets.SONAR_PROJECT_KEY }}"
+          fi
           if [ -z "$project" ]; then
             project="${{ secrets.SONAR_PROJECT }}"
           fi
@@ -102,10 +108,10 @@ jobs:
           fi
 
           if [ -n "$prop_project" ] && [ "$prop_project" != "${{ steps.sonar_cfg.outputs.project }}" ]; then
-            echo "WARNING: Project key mismatch detected." >&2
+            echo "Project key mismatch detected between sonar-project.properties and resolved settings." >&2
             echo "  sonar-project.properties: $prop_project" >&2
             echo "  resolved secret value: ${{ steps.sonar_cfg.outputs.project }}" >&2
-            echo "  Scanner uses resolved secret value from workflow args." >&2
+            exit 1
           else
             echo "SonarCloud project key consistency check passed."
           fi
